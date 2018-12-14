@@ -1,8 +1,9 @@
-// Load our library
+// Load our library and prefix and the cooldowns map
 const Discord = require("discord.js");
-
+const pref = require('../config.json').prefix;
+const cooldowns = new Discord.Collection();
 // In this event the magic happens, commands are being handled, af
-module.exports.execute = async (client) => {
+module.exports.execute = async (client, message) => {
     // Instead of typing message.channel.send('HI!'); to send 'HI!' you'll only need to reply('HI!'); to send 'HI!' 
   const reply = c => message.channel.send(c);
 
