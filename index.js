@@ -1,85 +1,86 @@
-const Discord = require ("discord.js");
-const fs = require("fs");
-const client = new Discord.Client({disableEveryone: true});
-const config = require("./config.json");
+/*
+  Checks if the node version is 8.0.0 or lower, if its it simply throws an error and stop working.
+*/
+if (process.version.slice(1).split(".")[0] < 8) throw new Error("Node 8.0.0 or higher is required. Update Node on your system.");
 
+// Requiring Default FileSystem
+const fs = require('fs');
+// Load Up Library
+const Discord = require('discord.js');
+// More Fancy Stuff
+const { promisify } = require('util');
+const readdir = promisify(require("fs").readdir);
+
+// Loading Configuration & Grab The Token from Configuration
+const config = require('./config.json');
 const token = config.token;
-const owner = config.owner;
+
+// Reads /commands/ and /events/ to grab the events. If there are none, throws an error. 
+const files = fs.readdirSync('./commands');
+const events = fs.readdirSync('./events');
+if (!files.length) throw Error('No command files found');
+if (!events.length) throw Error('No event files found!');
+
+// Defining our Client (The Bot Instance and More Stuff) and the collection commands are stored in.
+const client = new Discord.Client();
 client.commands = new Discord.Collection();
 
-fs.readdir("./cmds/", (err, files) => {
+// Fancy Log Message
+const log = message => {
+  console.log(`[${new Date().toLocaleString()}] - ${message}`);
+};
 
-    if(err) console.log(err);
+// Loads The Commands
+const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+for (const file of commandFiles) {
+  const command = require(`./commands/${file}`);
+	client.commands.set(command.name, command);
+}
 
-    let jsfile = files.filter(f => f.split(".").pop() === "js")
-    if(jsfile.length <= 0){
-      console.log("No commands were detected!");
-      return;
-    }
-
-    jsfile.forEach((f,) => {
-      let props = require(`./cmds/${f}`);
-      console.log(`${f} has been loaded!`);
-      client.commands.set(props.help.name, props);
-    });
-
+// Init function Loads The Events and run them when are 'trigerred'
+const init = async () => {
+  const evtFiles = await readdir("./events/");
+  evtFiles.forEach(file => {
+    const eventName = file.split(".")[0];
+    const event = require(`./events/${file}`);
+    client.on(eventName, (...args) => event.run(client, ...args));
+  
   });
+}
+// Run the init function.
+init();
 
-  client.on("ready", async () => {
-      console.log("READY BOT!");
-      await client.user.setActivity(`${client.guilds.size} servers | ${config.prefix}help`, { type: "WATCHING"});
-      await client.user.setStatus("online");
-  });
+// Logs how many commands & events we're loaded.
+log(`Loaded ${files.length} commands.`);
+log(`Loaded ${events.length} events.`);
 
-  client.on("guildCreate", async (guild) => {
-    let joinEmbed = new Discord.RichEmbed()
-    .setColor("#156d09")
-    .addField("Name: ", `**${guild.name}**`, true)
-    .addField("ID: ", `**${guild.id}**`, true)
-    .addField("Members: ", `**${guild.memberCount}**`, true)
-    .addField("Servers: ", `**${client.guilds.size}**`, true);
-    let logsServerJoin = client.channels.get('482295076106797076').send(joinEmbed);
+// Funtion: Converts for example 'hey bro, wassup' to 'Hey Bro, Wassup'
+String.prototype.toProperCase = function () {
+  return this.replace(/([^\W_]+[^\s-]*) */g, function (txt) {return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+};
 
-    let chan = await guild.createChannel("sales", "text");
-    chan.send("In this channel, advdertisments will be sent! Drag this channel in the desired category and enjoy the broadcasts! See an abuse? Report it at `Treport <USER ID>`");
-  });
+// Function: Gets a random object from an array. Ex:
+// let array = ['red', 'blue', 'orange'];
+// array.random();
+// Output: red or blue or orange, one of them.
+Array.prototype.random = function () {
+  return this[Math.floor(Math.random() * this.length)];
+};
 
-  client.on("guildDelete", async (guild) => {
-    let leftEmbed = new Discord.RichEmbed()
-    .setColor("#ff0000")
-    .addField("Name: ", `**${guild.name}**`, true)
-    .addField("ID: ", `**${guild.id}**`, true)
-    .addField("Members: ", `**${guild.memberCount}**`, true)
-    .addField("Servers: ", `**${client.guilds.size}**`, true);
-    let logsServerLeft = client.channels.get('482295076106797076').send(leftEmbed);
-  });
+// Function: Waits a specified time before continue running code.
+client.wait = require("util").promisify(setTimeout);
 
-
-  client.on("message", async message => {
-    if(message.author.bot) return;
-    if(!message.content.startsWith(config.prefix)) return;
-
-    const BannedGuildsArray = [];
-    const BannedUsersArray = [];
-
-    if(BannedGuildsArray.includes(message.guild.id))
-    return message.channel.send("Blacklisted server, couldn't perform any commands!");
-
-    if(BannedUsersArray.includes(message.author.id))
-    return message.channel.send("Blacklisted user, coudldn't perform any commands!");
-
-    let messageArray = message.content.split(" ");
-    let cmd = messageArray[0];
-    let args = messageArray.slice(1);
-
-    let commandfile = client.commands.get(cmd.slice(config.prefix.length));
-
-    try {
-    if(commandfile) commandfile.run(client,message,args);
-  } catch(e) {
-    return message.channel.send(`<:outage:> Coudln't perform command, please give the bot creator the error bellow in https://discord.gg/6CYZ6nf\nError: \`${e}\``)
-  }
-
+// Crash the bot on uncaughtExceptions, we need to catch them anyway.
+process.on("uncaughtException", (err) => {
+  const errorMsg = err.stack.replace(new RegExp(`${__dirname}/`, "g"), "./");
+  console.error("Uncaught Exception: ", errorMsg);
+  process.exit(1);
 });
 
-  client.login(token);
+// Shows us unhandledRejections & details.
+process.on("unhandledRejection", err => {
+  console.error("Uncaught Promise Error: ", err);
+});
+
+// Obviosuly we need to login ourselves.
+client.login(token);
