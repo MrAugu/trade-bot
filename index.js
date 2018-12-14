@@ -43,7 +43,7 @@ const init = async () => {
   evtFiles.forEach(file => {
     const eventName = file.split(".")[0];
     const event = require(`./events/${file}`);
-    client.on(eventName, (...args) => event.run(client, ...args));
+    client.on(eventName, (...args) => event.execute(client, ...args));
   
   });
 }
